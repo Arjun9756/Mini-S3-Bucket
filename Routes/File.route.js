@@ -6,7 +6,7 @@ require('dotenv').config({ path: path.join(__dirname, '..', '.env') })
 const verifyToken = require('../Utils Service/TokenVerify')
 const pool = require('../SQL Server/Database')
 const crypto = require('crypto')
-const redisClient = require('../Utils Service/Redi.utils')
+const {redis:redisClient} = require('../Utils Service/Redi.utils')
 const generateUniqueRandomId = require('../Utils Service/IDGenerate.utils')
 const { diskUpload, memoryUpload } = require('../Utils Service/Multer.utils')
 
