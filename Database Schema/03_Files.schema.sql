@@ -7,6 +7,7 @@ CREATE TABLE IF NOT EXISTS files(
     mime_type varchar(100),
     shared_with JSON,
     visibilty char(10) default 'private',
+    original_name varchar(512),
     FOREIGN KEY (user_id) REFERENCES users(id),
     INDEX idx_user_id(user_id)
 )

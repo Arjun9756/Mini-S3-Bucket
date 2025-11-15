@@ -8,7 +8,7 @@ const pool = require('../SQL Server/Database')
 const crypto = require('crypto')
 const redisClient = require('../Utils Service/Redi.utils')
 const generateUniqueRandomId = require('../Utils Service/IDGenerate.utils')
-const {diskUpload , memoryUpload} = require('../Utils Service/Multer.utils')
+const { diskUpload, memoryUpload } = require('../Utils Service/Multer.utils')
 
 /**
  * 
@@ -16,10 +16,9 @@ const {diskUpload , memoryUpload} = require('../Utils Service/Multer.utils')
  * @returns {Object}
  */
 
-function generateDigitalSign(payload = {})
-{
-    const signature = crypto.createHmac('sha256' , process.env.CRYPTO_SERVER_SECRET).update(JSON.stringify(payload)).digest('hex')
-    return {status:true , signature}
+function generateDigitalSign(payload = {}) {
+    const signature = crypto.createHmac('sha256', process.env.CRYPTO_SERVER_SECRET).update(JSON.stringify(payload)).digest('hex')
+    return { status: true, signature }
 }
 
 /**
@@ -28,12 +27,11 @@ function generateDigitalSign(payload = {})
  * @param {String} signature 
  * @param {String} signedURL 
  */
-async function saveToRedis(uid='' , signature='', signedURL = '')
-{
-    try{
-        await redisClient.set(`user:${uid}:${signedURL}` , signature)
-        await redisClient.expire(`user:${uid}:${signedURL}` , 300)
-    }catch(error){
+async function saveToRedis(uid = '', signature = '', signedURL = '') {
+    try {
+        await redisClient.set(`user:${uid}:${signedURL}`, signature)
+        await redisClient.expire(`user:${uid}:${signedURL}`, 300)
+    } catch (error) {
         console.log(`Error While Setting Up Key Value For Signed URL ${error.message}`)
     }
 }
@@ -44,18 +42,18 @@ async function saveToRedis(uid='' , signature='', signedURL = '')
  * @param {String} signedURL 
  * @returns {Object}
  */
-async function getFromRedis(uid='' , signedURL='')
-{
-    try{
+async function getFromRedis(uid = '', signedURL = '') {
+    try {
         const data = await redisClient.get(`user:${uid}:${signedURL}`)
-        if(data)
-            return {status:true , data:userSignedURLData}
+        console.log(`Data from Redis ${data}`)
+        if (data)
+            return { status: true, data }
 
         throw new Error("Invalid Key Or Key is Expired")
     }
-    catch(error){
+    catch (error) {
         console.log(error.message)
-        return {status:false , reason:error.message}
+        return { status: false, reason: error.message }
     }
 }
 
@@ -65,36 +63,40 @@ async function getFromRedis(uid='' , signedURL='')
  * @param {String} signature 
  * @returns {Object}
  */
-function generateSignedURL(payload = {} , signature = '')
-{
-    const signedURL = `http://localhost:5000/file-access?uid=${encodeURIComponent(payload.uid)}&path=${encodeURIComponent(payload.path)}&op=${encodeURIComponent(payload.op)}&exp=${encodeURIComponent(payload.exp)}&signature=${encodeURIComponent(signature)}`
-    return {status:true , signedURL}
+function generateSignedURL(payload = {}, signature = '') {
+    const signedURL = `http://localhost:3000/api/file/file-access?uid=${encodeURIComponent(payload.uid)}&path=${encodeURIComponent(payload.path)}&op=${encodeURIComponent(payload.op)}&exp=${encodeURIComponent(payload.exp)}&signature=${encodeURIComponent(signature)}`
+    return { status: true, signedURL }
 }
 
-async function validateData(redisSignature , payload)
-{
-    if(payload.signature !== redisSignature){
-        return {status:false , reason:"Redis Sign and URL Sign Not Match"}
-    }
-
+async function validateData(redisSignature, payload) {
     let connection;
-    try{
+    try {
 
         connection = await pool.getConnection()
-        const [rows , fields] = await connection.execute('SELECT api_secret_hash FROM api_keys WHERE user_id = ?' , [payload.uid])
-        payload['api_secret_hash'] = rows[0].api_secret_hash
-        
-        const {status , signature} = generateDigitalSign(payload)
-        if(signature != redisSignature)
-            return {status:false , reason:"Signature Invalid While Cross Check With Database"}
-        return {status:true , message:"Signatured Verified"}
+        await connection.query('USE MINI_S3_BUCKET')
+        const [rows, fields] = await connection.execute('SELECT api_secret_hash FROM api_keys WHERE user_id = ?', [payload.uid])
+
+        const payloadForSign = {     // Issue was payload at time of sign was different at time of verification even though they look similar but their structure
+            path: payload.filePath,   // was different
+            op: payload.op,
+            exp: Number(payload.exp),     // Crypto ("123") != Crypto(123) String != Number
+            uid: payload.uid,
+            api_secret_hash: rows[0].api_secret_hash
+        }
+
+        const { status, signature } = generateDigitalSign(payloadForSign)
+        console.log(`Sign verify ${signature} redis ${redisSignature}`)
+
+        if (signature !== redisSignature)
+            return { status: false, reason: "Signature Invalid While Cross Check With Database" }
+        return { status: true, message: "Signatured Verified" }
     }
-    catch(error){
+    catch (error) {
         console.log(`Error While Signature Verification With Cross Check With Database ${error.message}`)
-        return {status:false , reason:`Error While Signature Verification With Cross Check With Database ${error.message}`}
+        return { status: false, reason: `Error While Signature Verification With Cross Check With Database ${error.message}` }
     }
-    finally{
-        if(connection)
+    finally {
+        if (connection)
             connection.release()
     }
 }
@@ -108,13 +110,13 @@ router.get('/', (req, res) => {
 
 router.post('/generate-sign-url', verifyToken, async (req, res) => {
 
-    const { fileName, operation } = req.body
-    console.log(fileName , operation)
+    const { fileName, operation, api_key } = req.body
+    console.log(fileName, operation)
 
-    if (!fileName || !operation || (operation.toLowerCase() !== 'upload' && operation.toLowerCase() !== 'download')) {
+    if (!fileName || !operation || (operation.toLowerCase() !== 'upload' && operation.toLowerCase() !== 'download') || !api_key) {
         return res.status(401).json({
             status: false,
-            message: "File Name and Operation For The File is Required"
+            message: "File Name and Operation For The File is Required and API_KEY"
         })
     }
 
@@ -123,76 +125,89 @@ router.post('/generate-sign-url', verifyToken, async (req, res) => {
         connection = await pool.getConnection()
         await connection.query('USE MINI_S3_BUCKET')
 
-        const [rows, fields] = await connection.query('SELECT api_secret_hash FROM api_keys WHERE user_id = ?', [req.user._id])
-        const filePath = `uploads/${req.user._id}/${Date.now()}/${fileName}`
+        const [rows, fields] = await connection.query('SELECT api_secret_hash FROM api_keys WHERE api_key = ?', [api_key])
+        const filePath = `uploads/${req.user._id}`
 
         const payload = {
             path: filePath,
             op: operation,
             exp: Date.now() + 1000 * 300,    // 5 Minutes,
             uid: req.user._id,
-            api_secret_hash:rows[0].api_secret_hash
+            api_secret_hash: rows[0].api_secret_hash
         }
 
         // Create Digital Signature Using CryptoGraphy For Signed URL
-        const {status , signature} = generateDigitalSign(payload)
+        const { status, signature } = generateDigitalSign(payload)
 
         // Generate Signed Url And Send to Frontend
-        const {urlStatus , signedURL} = generateSignedURL(payload , signature)
-        await saveToRedis(payload.uid , signature , signedURL)
+        const { urlStatus, signedURL } = generateSignedURL(payload, signature)
+        await saveToRedis(payload.uid, signature, signedURL)
 
         return res.status(200).json({
-            status:true,
-            message:"Signed URL Generated Successfuly",
-            expireAfter:"5 Minutes",
-            signedURL:signedURL,
-            digitalSignature:signature
+            status: true,
+            message: "Signed URL Generated Successfuly",
+            expireAfter: "5 Minutes",
+            signedURL: signedURL,
+            digitalSignature: signature
         })
     }
     catch (error) {
         console.log(`Error While Fetching API_SECRET_HASH For Signed URL ${error.message}`)
         return res.status(501).json({
-            status:false,
-            message:`Error While Fetching API_SECRET_HASH For Signed URL ${error.message}`
+            status: false,
+            message: `Error While Fetching API_SECRET_HASH For Signed URL ${error.message}`
         })
     }
-    finally{
-        if(connection)
+    finally {
+        if (connection)
             connection.release()
     }
 })
 
-router.post('/file-access' , verifyToken ,  diskUpload.single('file') , async (req,res)=>{
-    if(req.file){
+router.post('/file-access', verifyToken, diskUpload.single('file'), async (req, res) => {
+
+    console.log(req.file)
+    if (!req.file) {
         return res.status(401).json({
-            status:false,
-            message:"No File is Found in Our Backend"
+            status: false,
+            message: "No File is Found in Our Backend"
         })
     }
 
-    const {uid , op , path , exp , signature} = req.query
-    if(!uid || !op || !path || !exp || !signature){
+    const { uid, op, path:filePath, exp, signature } = req.query
+    if (!uid || !op || !path || !exp || !signature) {
         return res.status(401).json({
-            status:false,
-            message:"All Field Of Signed URL is Required For Validation"
+            status: false,
+            message: "All Field Of Signed URL is Required For Validation"
         })
     }
 
     //  Fetch Signature form Redis 
-    const {status , userSignedURLData , reason} = await getFromRedis(uid , req.originalUrl)
-    if(!status){
+    const { status, data, reason } = await getFromRedis(uid, `http://localhost:3000${req.originalUrl}`)
+    if (!status) {
+        if (fs.existsSync(req.file.path))
+            fs.unlinkSync(req.file.path)
+
+        if (fs.existsSync(path.join(__dirname, '..', filePath))) {
+            fs.rmSync(path.join(__dirname, '..', filePath) , {recursive:true , force:true})
+        }
         return res.status(401).json({
-            status:false,
-            message:reason
+            status: false,
+            message: reason
         })
     }
 
     // Valdate Redis Signature and URL Signature and Database Signature 
-    const {status:validationStatus , reason:validationReason , message} = await validateData(userSignedURLData , {uid , op , path , exp})
-    if(!validationStatus){
-        if(req.query.path && req.file){
-            fs.unlinkSync(req.query.path)
+    const { status: validationStatus, reason: validationReason, message } = await validateData(data, { filePath, op, exp, uid })
+    if (!validationStatus) {
+
+        if (fs.existsSync(req.file.path))
+            fs.unlinkSync(req.file.path)
+
+        if (fs.existsSync(path.join(__dirname, '..', filePath))) {
+            fs.rmSync(path.join(__dirname, '..', filePath) , {recursive:true , force:true})
         }
+
         return res.status(401).json({
             status,
             validationReason
@@ -201,29 +216,44 @@ router.post('/file-access' , verifyToken ,  diskUpload.single('file') , async (r
 
     // Save to Database The File Has Been Recorded On Server
     let connection;
-    try{
-        const {status , _id:uniqueFileID} = generateUniqueRandomId()
+    try {
+        const { status, _id: uniqueFileID } = generateUniqueRandomId()
         connection = await pool.getConnection()
+        await connection.query('USE MINI_S3_BUCKET')
 
-        const sqlQuery = `INSERT INTO files (id,user_id,filename,storage_path,size,mime_type,shared_with,visibilty) VALUES (?,?,?,?,?,?,?,?)`
-        const [rows , fields] = await connection.execute(sqlQuery , [uniqueFileID , req.user._id , req.file.fileName , req.file.path , req.file.size , req.file.mimetype , {} , 'private'])
+        const sqlQuery = `INSERT INTO files (id,user_id,filename,storage_path,size,mime_type,shared_with,visibilty,original_name) VALUES (?,?,?,?,?,?,?,?,?)`
+        const [rows, fields] = await connection.execute(sqlQuery, [uniqueFileID , req.user._id , req.file.filename , req.file.path , req.file.size , req.file.mimetype , JSON.stringify({}) , 'private' , req.file.originalname])
 
-        if(rows.affectedRows === 0){
+        if (rows.affectedRows === 0) {
             return res.status(501).json({
-                status:false,
-                message:"SQL Server Issue In Insertion Of File Data"
+                status: false,
+                message: "SQL Server Issue In Insertion Of File Data"
             })
         }
+
+        return res.status(200).json({
+            status: true,
+            message: "File Inserted On The Server",
+            rows
+        })
+        // future processing
     }
-    catch(error){
+    catch (error) {
         console.log(`SQL Server Issue in Insertion of File Data ${error.message}`)
+        if (fs.existsSync(req.file.path))
+            fs.unlinkSync(req.file.path)
+
+        if (fs.existsSync(path.join(__dirname, '..', filePath))) {
+            fs.rmSync(path.join(__dirname, '..', filePath) , {recursive:true , force:true})
+        }
+
         return res.status(501).json({
-            status:false,
-            reason:`SQL Server Issue in Insertion of File Data ${error.message}`
+            status: false,
+            reason: `SQL Server Issue in Insertion of File Data ${error.message}`
         })
     }
-    finally{
-        if(connection)
+    finally {
+        if (connection)
             connection.release()
     }
 })
