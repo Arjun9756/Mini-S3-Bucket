@@ -25,8 +25,9 @@ const virusScanQueueEvent = new QueueEvents('virusScanQueue', {
     autorun:true
 })
 
-virusScanQueueEvent.on('failed' , (job , id)=>{
-    
+virusScanQueueEvent.on('failed' , async ({jobId , failedReason})=>{
+    const job = await virusScanQueue.getJob(jobId)
+    console.log(`Job With ID ${jobId} is Failed To Process With Reason ${failedReason}`)
 })
 
 async function startSubsciber() {
