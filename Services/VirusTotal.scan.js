@@ -25,7 +25,7 @@ async function scanFileWithVirusTotal(filePath) {
         })
 
         if (res.data) {
-            return { status: true, analysisId: res.data.data.id }
+            return {analysisId: res.data.data.id }
         }
         throw new Error("Failed To Process The File")
     }
@@ -47,7 +47,7 @@ async function getAnalysisReport(analysisId)
 
             const status = res.data.data.attributes.status
             if(status === 'completed'){
-                return {status:true , data:res.data}
+                return {date:res.data.data.attributes.date , stats:res.data.data.attributes.stats}
             }
             await new Promise((resolve , reject)=>{
                 setTimeout(resolve , 3000)      // Har 3 second bad resolve hoga tab tak await loop ko sleep krega agr reject krdiya hota toh await error throw krta
