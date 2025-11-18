@@ -1,4 +1,4 @@
-const { createClient } = require('../Utils Service/Redi.utils')
+const { createClient } = require('../Utils Service/Redis.utils')
 const { Queue, QueueEvents } = require('bullmq')
 const fs = require('fs')
 const path = require('path')
@@ -31,24 +31,20 @@ virusScanQueueEvent.on('failed' , async ({jobId , failedReason})=>{
 })
 
 async function startSubsciber() {
-    // let data = []   // Bulk Processing
-    try {
-        await subscriber.subscribe('virusScan', (msg) => {
-            msg = JSON.parse(msg)
-            virusScanQueue.add('scanFile', { filePath: msg.filePath , msg }, {
-                attempts: 4, // 3 attempt karo,
-                removeOnComplete: true,
-                removeOnFail: true,
-                backoff: { type: "exponential", delay: 5000 }, // phele 5 second then 10 second means (delay * 2^(attempt-1))
-                timestamp: 60000, // 60 Second me hogya toh thik verna attept -- hoga agr attemp 1 h or 60 second me nhi hua toh queue se remove
-                priority: 1
+    return new Promise(async (resolve , reject)=>{
+        try{
+            await subscriber.subscribe('virusScan')
+            subscriber.on('message' , (channel , msg)=>{
+                console.log(channel , msg)
             })
-        })
-    }
-    catch (error) {
-        console.log(`Error in Redis Subsciber ${error.message}`)
-        return { status: false, reason: error.message }
-    }
+
+            resolve()
+        }
+        catch(error){
+            console.log(error.message)
+            reject()
+        }
+    })
 }
 
 module.exports = startSubsciber

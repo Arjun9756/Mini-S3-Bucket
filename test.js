@@ -1,9 +1,9 @@
-const redisClient = require('./Utils Service/Redi.utils')
-async function start() {
-    await redisClient.publish('newsletter', "hello from news letter")
-    await redisClient.subscribe('newletter', (msg) => {
-        console.log(msg)
-    })
-}
+const publishOnChannel = require('./Services/Redis.publisher')
+const startSubsciber = require('./Services/Redis.subscriber')
 
-start()
+async function startService()
+{
+    await startSubsciber()
+    await publishOnChannel('virusScan' , 'hello')
+}
+startService()
