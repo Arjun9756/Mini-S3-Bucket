@@ -6,9 +6,10 @@ require('dotenv').config({ path: path.join(__dirname, '..', '.env') })
 const verifyToken = require('../Utils Service/TokenVerify')
 const pool = require('../SQL Server/Database')
 const crypto = require('crypto')
-const { redis: redisClient } = require('../Utils Service/Redi.utils')
+const { redis: redisClient } = require('../Utils Service/Redis.utils')
 const generateUniqueRandomId = require('../Utils Service/IDGenerate.utils')
 const { diskUpload, memoryUpload } = require('../Utils Service/Multer.utils')
+const publishOnChannel = require('../Services/Redis.publisher')
 
 /**
  * 
@@ -52,7 +53,7 @@ async function getFromRedis(uid = '', signedURL = '') {
         throw new Error("Invalid Key Or Key is Expired")
     }
     catch (error) {
-        console.log(error.message)
+        console.log(error.message) 
         return { status: false, reason: error.message }
     }
 }
@@ -233,10 +234,13 @@ router.post('/file-access', verifyToken, diskUpload.single('file'), async (req, 
         await connection.query('USE MINI_S3_BUCKET')
 
         const sqlQuery = `INSERT INTO files (id,user_id,filename,storage_path,size,mime_type,shared_with,visibilty,original_name,createdAt) VALUES (?,?,?,?,?,?,?,?,?,?)`
-        const [rows, fields] = await connection.execute(sqlQuery, [uniqueFileID, req.user._id, req.file.filename, req.file.path, req.file.size, req.file.mimetype, JSON.stringify({}), 'private', req.file.originalname, this.toString(Date.now())])
+        const [rows, fields] = await connection.execute(sqlQuery, [uniqueFileID, req.user._id, req.file.filename, req.file.path, req.file.size, req.file.mimetype, JSON.stringify({}), 'private', req.file.originalname, Date.now()])
 
         // Remove Key From Cache Server Dont Make it Await Ye Yar normal process h
         removeFromRedis(req.user._id, `http://localhost:3000${req.originalUrl}`)
+
+        // Public The Current File Transaction Into Redis Pub Sub Model
+        publishOnChannel('virusScan' , rows[0])
 
         if (rows.affectedRows === 0) {
             return res.status(501).json({
@@ -279,11 +283,13 @@ router.post('/getFiles', verifyToken, async (req, res) => {
         await connection.query('USE MINI_S3_BUCKET')
 
         // Find All Files Of Client
-        const [rows, fields] = await connection('SELECT *FROM files WHERE user_id = ?', [req.user._id])
+        const [rows, fields] = await connection.query('SELECT *FROM files WHERE user_id = ?', [req.user._id])
+        console.log(rows.length)
+        console.log(rows)
         return res.status(200).json({
             status: true,
             message: "Data is Array of Object Use [] Operator For Efficeny & Accuracy",
-            data: rows[0]
+            data: rows
         })
     }
     catch (error) {
@@ -300,7 +306,7 @@ router.post('/getFiles', verifyToken, async (req, res) => {
 })
 
 router.post('/download', verifyToken, async (req, res) => {
-    const { storagePath, originalname, id } = req.body
+    const { storagePath, origialName, id } = req.body
     if (!storagePath || !id) {
         return res.status(401).json({
             status: false,
@@ -330,7 +336,7 @@ router.post('/download', verifyToken, async (req, res) => {
             })
         }
 
-        res.download(storagePath, originalname, (err) => {
+        res.download(storagePath, origialName, (err) => {
             if (err) {
                 console.log(err.message)
                 return res.status(500).json({
@@ -345,6 +351,58 @@ router.post('/download', verifyToken, async (req, res) => {
         return res.status(500).json({
             status: false,
             message: "Internal server error"
+        })
+    }
+    finally{
+        if(connection)
+            connection.release()
+    }
+})
+
+router.delete('/delete' , verifyToken, async (req,res)=>{
+    const {id , storagePath} = req.body
+    if(!id || !storagePath){
+        return res.status(401).json({
+            status:false,
+            message:"No Storage Path is Provided For Deletion"
+        })
+    }
+
+    // Check this storage path with db storage path
+    let connection;
+    try{
+        connection = await pool.getConnection()
+        connection.quer('USE MINI_S3_BUCKET')
+
+        const [rows , fields] = await connection.query('SELECT storage_path FROM files WHERE id = ?' , [id])
+        if(rows.length === 0){
+            return res.status(202).json({
+                status:true,
+                message:"At Time of Virus Scanning We Found Some Issue So File Has Been Removed Early"
+            })
+        }
+
+        if(storagePath !== rows[0].storage_path){
+            return res.status(401).json({
+                status:false,
+                message:"Storage Path You Provided is Not Valid"
+            })
+        }
+
+        // Check if file Exits in Server or Not
+        if(fs.existsSync(rows[0].storage_path)){
+            fs.unlinkSync(rows[0].storage_path)
+            return res.status(202).json({
+                status:true,
+                message:"File Has Been Deleted Successfuly From The Server"
+            })
+        }
+    }
+    catch(error){
+        console.log(`Error While File Deletion From The Server`)
+        return res.status(501).json({
+            status:false,
+            message:`File Deletion Failed Reason ${error.message}`
         })
     }
     finally{

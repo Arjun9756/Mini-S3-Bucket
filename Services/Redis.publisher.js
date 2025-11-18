@@ -1,4 +1,4 @@
-const { createClient } = require('../Utils Service/Redi.utils')
+const { createClient } = require('../Utils Service/Redis.utils')
 const publisher = createClient()
 
 publisher.on('connect' , ()=>console.log('Redis Publisher Connected To Server'))
