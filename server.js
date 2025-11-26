@@ -9,6 +9,7 @@ const userRoute = require('./Routes/User.route')
 const createDatabaseAndTable = require('./Utils Service/ExecuteTable.db')
 const fileRoute = require('./Routes/File.route')
 const cors = require('cors')
+const rateLimiter = require('./Server Security/RateLimit.secure')
 
 dotenv.config({
     path: path.join(__dirname, '.env')
@@ -21,7 +22,8 @@ if (cluster.isPrimary || cluster.isMaster) {
 }
 
 app.use(express.json({
-    limit: '10mb'
+    limit: '10mb',
+    strict:true
 }))
 
 app.use(cors({
@@ -34,13 +36,14 @@ app.use(cors({
 app.use('/api/file', fileRoute)
 
 app.use(express.urlencoded({
-    extended: true
+    extended: true,
+    limit:'10mb'
 }))
 
 app.use('/api/user', userRoute)
 app.set('trust proxy' , true)
 
-app.get('/', (req, res) => {
+app.get('/', rateLimiter , (req, res) => {
     return res.status(200).json({
         status: true,
         server: os.machine(),
@@ -52,23 +55,27 @@ app.get('/', (req, res) => {
     })
 })
 
-if(cluster.isPrimary || cluster.isMaster)
-{
-    console.log('Primary Process is Spawning Multiple Process Dynamic Load Balancer')
-    for(let i=0 ; i<os.cpus().length ; i++)
-        cluster.fork()
-
-    cluster.on('exit' , (worker , code , signal)=>{
-        console.log(`Process With PID ${worker.pid} is Died Spawning New Process`)
-        setTimeout(()=>{
-            cluster.fork()
-            console.log('New Process has Joined The Pool')
-        },5000)
-    })
-}
-else
-{
-    app.listen(process.env.PORT || 3000 , ()=>{
+app.listen(process.env.PORT || 3000 , ()=>{
         console.log(`Server is Running On Port ${process.env.PORT || 3000}`)
     })
-}
+
+// if(cluster.isPrimary || cluster.isMaster)
+// {
+//     console.log('Primary Process is Spawning Multiple Process Dynamic Load Balancer')
+//     for(let i=0 ; i<os.cpus().length ; i++)
+//         cluster.fork()
+
+//     cluster.on('exit' , (worker , code , signal)=>{
+//         console.log(`Process With PID ${worker.pid} is Died Spawning New Process`)
+//         setTimeout(()=>{
+//             cluster.fork()
+//             console.log('New Process has Joined The Pool')
+//         },5000)
+//     })
+// }
+// else
+// {
+//     app.listen(process.env.PORT || 3000 , ()=>{
+//         console.log(`Server is Running On Port ${process.env.PORT || 3000}`)
+//     })
+// }
