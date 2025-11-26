@@ -1,4 +1,6 @@
 const jwt = require('jsonwebtoken')
+const pool = require('../SQL Server/Database')
+
 async function verifyToken(req, res, next) {
     const token = req.headers['authorization'].split(' ')[1]
     console.log(token)
@@ -10,8 +12,21 @@ async function verifyToken(req, res, next) {
         })
     }
 
+    let connection;
     try {
+        connection = await pool.getConnection()
+        connection.query('USE MINI_S3_BUCKET')
+
         const decode = jwt.verify(token, process.env.JWT_SECRET_KEY, { algorithms: ['HS256'] })
+        const [rows , fields] = await connections.quer('SELECT id FROM users WHERE id = ?' , [decode._id])
+
+        if(!rows[0].id){
+            return res.status(401).json({
+                status:false,
+                message:"User is Not Login or Registered or Token Expire"
+            })
+        }
+
         req.user = {
             _id: decode._id,
             name: decode.name,

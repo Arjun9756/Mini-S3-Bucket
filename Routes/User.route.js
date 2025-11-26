@@ -5,6 +5,7 @@ const generateUniqueRandomId = require('../Utils Service/IDGenerate.utils')
 const bcrypt = require('bcryptjs')
 const generateAPI_KEY_API_SECRET = require('../Utils Service/API_KEY_SECRET.utils')
 const jwt = require('jsonwebtoken')
+const verifyToken = require('../Utils Service/TokenVerify')
 
 /**
  * @param {string} password 
@@ -168,6 +169,38 @@ router.post('/login', async (req, res) => {
         })
     }
     finally {
+        if(connection)
+            connection.release()
+    }
+})
+
+router.delete('/delete' , verifyToken , async (req,res)=>{
+    let connection;
+    try{
+        connection = await pool.getConnection()
+        connection.query('USE MINI_S3_BUCKET')
+
+        const [rows , fields] = await connection.query('DELET FROM users WHERE id = ?' , [req.user._id])
+        if(rows.affectedRows === 0){
+            return res.status(501).json({
+                status:false,
+                message:"Error While Deleting The Current User"
+            })
+        }
+
+        return res.status(200).json({
+            status:true,
+            message:"User Deleted Successfuly"
+        })
+    }
+    catch(error){
+        console.log(`Error in SQL Query  ${error.message}`)
+        return res.status(501).json({
+            status:false,
+            message:`Internal Server Error in SQL ${error.message}`
+        })
+    }
+    finally{
         if(connection)
             connection.release()
     }

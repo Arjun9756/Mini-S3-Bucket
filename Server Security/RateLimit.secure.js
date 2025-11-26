@@ -11,10 +11,9 @@ const valkey = new Valkey({
     username:process.env.VALKEY_USER || '',
     port:process.env.VALKEY_PORT || 6379,
     password:process.env.VALKEY_PASSWORD || '',
-    tls:{rejectUnauthorized:true}
+    tls:{rejectUnauthorized:false}
 })
 
-console.log(process.env)
 
 async function userRateLimit(req , res , next){
     const userIPAddress = req.headers['cf-connecting-ip'] || req.ip      // Req From Cloudflare or AWS or Google MiddleWare Services
@@ -27,25 +26,25 @@ async function userRateLimit(req , res , next){
     }
 
     try{
-        const currentCount = await valkey.get(userIPAddress)
-        if(!currentCount){
-            await valkey.set(userIPAddress , 1 , "EX" , 300)
-            next()
+        const currentCount = await valkey.incr(`rateLimit:${userIPAddress}`)
+        console.log(currentCount)
+
+        if(currentCount === 1){
+            await valkey.expire(userIPAddress , 300)
         }
         
         const count = parseInt(currentCount)
-        if(count >= parseInt(process.env.RATE_LIMIT_THRESHOLD_VAL)){
+        if(count > parseInt(process.env.RATE_LIMIT_THRESHOLD_VAL)){
             return res.status(429).json({
                 status:false,
                 message:"Max Try Reached Rate Limiter Applied"
             })
         }
 
-        await valkey.set(userIPAddress , count + 1)
-        next()
+        return next()
     }
     catch(error){
-        console.log(`Error In Rate Limiting Service`)
+        console.log(`Error In Rate Limiting Service ${error.message}`)
         return res.status(500).json({
             status:false,
             message:error

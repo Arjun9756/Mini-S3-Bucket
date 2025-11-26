@@ -5,6 +5,9 @@ CREATE TABLE IF NOT EXISTS api_keys(
     api_secret_hash varchar(256) UNIQUE,
     permission json,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (user_id) REFERENCES users(id),
-    INDEX idx_user_id (user_id)
+    INDEX idx_user_id (user_id),
+    FOREIGN KEY (user_id) 
+        REFERENCES users(id)
+        ON DELETE CASCADE
+        ON UPDATE CASCADE
 );
