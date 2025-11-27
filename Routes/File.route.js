@@ -80,6 +80,12 @@ function generateSignedURL(payload = {}, signature = '') {
     return { status: true, signedURL }
 }
 
+/**
+ * 
+ * @param {string} redisSignature 
+ * @param {Object} payload 
+ * @returns Boolean
+ */
 async function validateData(redisSignature, payload) {
     let connection;
     try {
@@ -111,6 +117,11 @@ async function validateData(redisSignature, payload) {
         if (connection)
             connection.release()
     }
+}
+
+function generateShareURL(payload){
+    const shareURL = `http://localhost:3000/api/file/shareFileAccess?shareByID=${encodeURIComponent(payload.shareByID)}&shareFileID=${encodeURIComponent(payload.shareFileID)}&shareFilePath=${encodeURIComponent(payload.shareFilePath)}&sahreWithEmail=${encodeURIComponent(payload.shareWithID)}&shareWithID=${encodeURIComponent(payload.shareWithID)}`
+    return {status:true , shareableURL:shareURL}
 }
 
 router.get('/', (req, res) => {
@@ -234,7 +245,7 @@ router.post('/file-access', verifyToken, diskUpload.single('file'), async (req, 
         await connection.query('USE MINI_S3_BUCKET')
 
         const sqlQuery = `INSERT INTO files (id,user_id,filename,storage_path,size,mime_type,shared_with,visibilty,original_name,createdAt) VALUES (?,?,?,?,?,?,?,?,?,?)`
-        const [rows, fields] = await connection.execute(sqlQuery, [uniqueFileID, req.user._id, req.file.filename, req.file.path, req.file.size, req.file.mimetype, JSON.stringify({}), 'private', req.file.originalname, Date.now()])
+        const [rows, fields] = await connection.execute(sqlQuery, [uniqueFileID, req.user._id, req.file.filename, req.file.path, req.file.size, req.file.mimetype, JSON.stringify({}), 'public', req.file.originalname, Date.now()])
 
         // Remove Key From Cache Server Dont Make it Await Ye Yar normal process h
         removeFromRedis(req.user._id, `http://localhost:3000${req.originalUrl}`)
@@ -247,11 +258,12 @@ router.post('/file-access', verifyToken, diskUpload.single('file'), async (req, 
             filePath: req.file.path,
             fileMimeType: req.file.mimetype,
             shared_with: JSON.stringify({}),
-            visibilty: 'private',
+            visibilty: 'public',
             original_name: req.file.originalname,
             createdAt: Date.now()
         }
 
+        Object.seal(payloadForRedisModel) // Object Seal for Server Security
         publishOnChannel('virusScan', JSON.stringify(payloadForRedisModel))
 
         if (rows.affectedRows === 0) {
@@ -379,10 +391,10 @@ router.delete('/delete', verifyToken, async (req, res) => {
     }
 
     // Check this storage path with db storage path
-    let connection;
+    let connection; 
     try {
         connection = await pool.getConnection()
-        connection.quer('USE MINI_S3_BUCKET')
+        connection.query('USE MINI_S3_BUCKET')
 
         const [rows, fields] = await connection.query('SELECT storage_path FROM files WHERE id = ?', [id])
         if (rows.length === 0) {
@@ -482,6 +494,8 @@ router.post('/shareWith', verifyToken, async (req, res) => {
             shareWithID: rows[0].id
         }
 
+        Object.seal(payload)   // Seal Object For Server Security
+
         parsedArray.push(payload)
         const [updateData] = await connection.query('UPDATE users SET shared_with = ? where id = ?', [JSON.stringify(parsedArray), rows[0].id])
 
@@ -494,9 +508,12 @@ router.post('/shareWith', verifyToken, async (req, res) => {
         }
 
         await connection.commit()
+        const {status , shareableURL} = generateShareURL(payload)
+
         return res.status(200).json({
             status: true,
-            message: "File Shared With User"
+            message: "File Shared With User",
+            shareableURL
         })
     }
     catch (error) {

@@ -19,6 +19,8 @@ user on the basis of their ip address but the issue is not that issue is i thoug
 in req.ip attribute  
 
 To Addmore if you want to knwo why req behaves like this client -> req -> (CDN / Proxy) -> origin server this is done so beacuse to provide the data or static files to the client if faster manner these servers caches the static file like html js css or other images videos for temp basis only not permananet and for proxy server for protecting your origin server from bots or hackers and to provide smoother network flow
+
+9.The most important thing i learned while creationg of system is that optimizing and scaling the system is good as well as optimizing the database is also good but the thing to be consider that what datatype and how you are storing the data into database For exmaple The I faced out is i have implemenetd the shared with attribute as a array of the data shared to that people but the issue is that if we want to find whether that particular file let say Person A share file(X) is shared to person B now we want to find whether its true that file is shared or not we have to traverse the O(N) time in an array this leads me the newtork latency from 20ms toh 73ms but as of know the system is created on same thing so i am not going to replace it but yeah in future i will remember about the same and try to implement somthing more efficent like if data is stored in sorted form so that we can apply binary search O(logn) time  
 ---
 Yeah i am currently also implementing the on process virus scan check service without receivng that file on the server but this lead me to a higher cost and more complex logic still trying....
 
