@@ -30,7 +30,7 @@ async function userRateLimit(req , res , next){
         console.log(currentCount)
 
         if(currentCount === 1){
-            await valkey.expire(userIPAddress , 300)
+            await valkey.expire(`rateLimit:${userIPAddress}` , 300)
         }
         
         const count = parseInt(currentCount)

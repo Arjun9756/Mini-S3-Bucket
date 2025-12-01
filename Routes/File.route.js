@@ -456,9 +456,9 @@ router.post('/shareWith', verifyToken, async (req, res) => {
         connection.query('USE MINI_S3_BUCKET')
 
         await connection.beginTransaction()
-        const [rows, fields] = await connection.query('SELECT id , shared_with FROM users WHERE id = ?', [emailToShareWith])
+        const [rows, fields] = await connection.query(`SELECT users.id as id FROM users WHERE email = ?` ,[emailToShareWith])
 
-        if (!rows[0].id) {
+        if (rows.length === 0 || !rows[0].id) {
             await connection.rollback()
             return res.status(401).json({
                 status: false,
@@ -495,9 +495,10 @@ router.post('/shareWith', verifyToken, async (req, res) => {
         }
 
         Object.seal(payload)   // Seal Object For Server Security
-
         parsedArray.push(payload)
-        const [updateData] = await connection.query('UPDATE users SET shared_with = ? where id = ?', [JSON.stringify(parsedArray), rows[0].id])
+
+        console.log(parsedArray)
+        const [updateData] = await connection.query('UPDATE files SET shared_with = ? where user_id = ?', [JSON.stringify(parsedArray), req.user._id])
 
         if (updateData.affectedRows === 0) {
             console.log('Data Not Updated On The Database')
