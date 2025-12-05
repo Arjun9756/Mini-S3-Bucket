@@ -252,6 +252,7 @@ router.post('/file-access', verifyToken, diskUpload.single('file'), async (req, 
 
         // Public The Current File Transaction Into Redis Pub Sub Model
         const payloadForRedisModel = {
+            name: "virusScan",
             uniqueFileID: uniqueFileID,
             userId: req.user._id,
             fileNameOnServer: req.file.filename,
@@ -264,7 +265,7 @@ router.post('/file-access', verifyToken, diskUpload.single('file'), async (req, 
         }
 
         Object.seal(payloadForRedisModel) // Object Seal for Server Security
-        publishOnChannel('virusScan', JSON.stringify(payloadForRedisModel))
+        publishOnChannel("virusAndMailService", JSON.stringify(payloadForRedisModel))
 
         if (rows.affectedRows === 0) {
             return res.status(501).json({
@@ -411,21 +412,21 @@ router.post('/download', verifyToken, async (req, res) => {
                     message: "No File Data are Available Of The Sharing User in Our Database"
                 })
             }
-            
+
             console.log(typeof rows[0].shared_with)
             console.log(rows[0].shared_with)
 
             let parsedArray;
-            try{
-                if(Array.isArray(rows[0].shared_with))
+            try {
+                if (Array.isArray(rows[0].shared_with))
                     parsedArray = rows[0].shared_with
-                else if(typeof rows[0].shared_with === "object" && rows[0].shared_with !== null)
+                else if (typeof rows[0].shared_with === "object" && rows[0].shared_with !== null)
                     parsedArray = rows[0].shared_with
-                else if(typeof rows[0].shared_with === "string")
+                else if (typeof rows[0].shared_with === "string")
                     parsedArray = JSON.parse(rows[0].shared_with)
                 if (!Array.isArray(parsedArray)) parsedArray = [];
             }
-            catch(error){
+            catch (error) {
                 parsedArray = []
             }
 
@@ -436,11 +437,11 @@ router.post('/download', verifyToken, async (req, res) => {
                 })
             }
 
-            let isPermit = parsedArray.some((item , index , arr)=>{
+            let isPermit = parsedArray.some((item, index, arr) => {
                 return item.shareFileID === shareFileID && item.shareFilePath === shareFilePath && item.shareWithEmail === shareWithEmail
             })
 
-            if(!isPermit){
+            if (!isPermit) {
                 return res.status(401).json({
                     status: false,
                     message: "Permission To File Share To You is Revoked !Permit"
@@ -556,7 +557,7 @@ router.post('/shareWith', verifyToken, async (req, res) => {
             })
         }
 
-        const [rows , fields] = await connection.query('SELECT shared_with FROM files WHERE user_id = ?' , [req.user._id])
+        const [rows, fields] = await connection.query('SELECT shared_with FROM files WHERE user_id = ?', [req.user._id])
         let parsedArray;
 
         try {
@@ -603,6 +604,16 @@ router.post('/shareWith', verifyToken, async (req, res) => {
         await connection.commit()
         const { status, shareableURL } = generateShareURL(payload)
 
+        const payloadForEmail = {
+            name: "mailSend",
+            operation: "Shared",
+            shareByEmail: req.user.email,
+            shareWithEmail: emailToShareWith,
+            shareableURL,
+            shareName:req.user.name
+        }
+
+        await publishOnChannel('virusAndMailService' , JSON.stringify(payloadForEmail))
         return res.status(200).json({
             status: true,
             message: "File Shared With User",
@@ -624,64 +635,74 @@ router.post('/shareWith', verifyToken, async (req, res) => {
     }
 })
 
-router.post('/removeShare' , verifyToken , async (req,res)=>{
+router.post('/removeShare', verifyToken, async (req, res) => {
 
-    const {sharedWithEmail , sharedWithId} = req.body
-    if(!sharedWithEmail || !sharedWithId){
+    const { sharedWithEmail, sharedWithId } = req.body
+    if (!sharedWithEmail || !sharedWithId) {
         return res.status(401).json({
-            status:false,
-            message:"Shared With Email and Her ID is Required"
+            status: false,
+            message: "Shared With Email and Her ID is Required"
         })
     }
 
     let connection;
-    try{
+    try {
         connection = await pool.getConnection()
         connection.query('USE MINI_S3_BUCKET')
 
         connection.beginTransaction()
-        const [rows , fields] = await connection.query(`SELECT shared_with FROM files WHERE user_id = ?` , [req.user._id])
+        const [rows, fields] = await connection.query(`SELECT shared_with FROM files WHERE user_id = ?`, [req.user._id])
 
         let parsedArray;
-        if(Array.isArray(rows[0].shared_with)){
+        if (Array.isArray(rows[0].shared_with)) {
             parsedArray = rows[0].shared_with
         }
-        else if(typeof rows[0].shared_with === 'object' || rows[0].shared_with !== null){
+        else if (typeof rows[0].shared_with === 'object' || rows[0].shared_with !== null) {
             parsedArray = rows[0].shared_with
         }
-        else if(typeof rows[0].shared_with === 'string'){
+        else if (typeof rows[0].shared_with === 'string') {
             parsedArray = rows[0].shared_with
         }
 
 
         // Time Complexity is O(N^2) Future Improvement Can Be Done By Database Normalization To Time Complexity O(logn)
-        for(let i=0 ; i<parsedArray.length ; i++)
-        {
-            if(parsedArray[i].shareWithEmail == sharedWithEmail && parsedArray[i].shareWithID == sharedWithId){
-                parsedArray.splice(i , 1)
+        for (let i = 0; i < parsedArray.length; i++) {
+            if (parsedArray[i].shareWithEmail == sharedWithEmail && parsedArray[i].shareWithID == sharedWithId) {
+                parsedArray.splice(i, 1)
 
-                await connection.query('UPDATE files SET shared_with = ? WHERE user_id = ?' ,[JSON.stringify(parsedArray) , req.user._id])
+                await connection.query('UPDATE files SET shared_with = ? WHERE user_id = ?', [JSON.stringify(parsedArray), req.user._id])
                 await connection.commit() // Comit Changes To Database
 
+                const payloadForEmail = {
+                    name: "mailSend",
+                    operation: "Revoked",
+                    shareByEmail: req.user.email,
+                    shareWithEmail: sharedWithEmail,
+                    shareableURL,
+                    shareName:req.user.name
+                }
+
+                publishOnChannel('virusAndMailService' , JSON.stringify(payloadForEmail))
+
                 return res.status(200).json({
-                    status:true,
-                    message:"Shared User Removed From List"
+                    status: true,
+                    message: "Shared User Removed From List"
                 })
             }
         }
 
         await connection.rollback()   // RollBack To Previous State Data Consistency
         return res.status(401).json({
-            status:false,
-            message:"Not Able To Delete The Shared User From Database Due To Email to Which Data is Shared is Revoked"
+            status: false,
+            message: "Not Able To Delete The Shared User From Database Due To Email to Which Data is Shared is Revoked"
         })
     }
-    catch(error){
+    catch (error) {
         await connection.rollback() // RollBack To Previous State Data Consistency
         console.log(`Error While Removing Shared User From Database ${error.message}`)
         return res.status(500).json({
-            status:false,
-            message:error.message
+            status: false,
+            message: error.message
         })
     }
 })
