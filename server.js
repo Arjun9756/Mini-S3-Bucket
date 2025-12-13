@@ -34,9 +34,9 @@ app.use(cors({
     credentials: true
 }))
 
-app.use('/api/file', fileRoute)
-app.use('/api/user', userRoute)
-app.use('/api/report', analysisRoute)
+app.use('/api/file', rateLimiter ,fileRoute)
+app.use('/api/user', rateLimiter , userRoute)
+app.use('/api/report', rateLimiter ,analysisRoute)
 
 app.use(express.urlencoded({
     extended: true,
