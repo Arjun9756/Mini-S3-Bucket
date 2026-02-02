@@ -277,7 +277,16 @@ router.post('/file-access', verifyToken, diskUpload.single('file'), async (req, 
         return res.status(200).json({
             status: true,
             message: "File Inserted On The Server",
-            rows
+            rows,
+            uniqueFileID: uniqueFileID,
+            userId: req.user._id,
+            fileNameOnServer: req.file.filename,
+            filePath: req.file.path,
+            fileMimeType: req.file.mimetype,
+            shared_with: JSON.stringify({}),
+            visibilty: 'public',
+            original_name: req.file.originalname,
+            createdAt: Date.now()
         })
         // future processing
     }
@@ -504,7 +513,7 @@ router.delete('/delete', verifyToken, async (req, res) => {
 
         // Check if file Exits in Server or Not
         if (fs.existsSync(rows[0].storage_path)) {
-            fs.unlinkSync(rows[0].storage_path)
+            fs.unlink(rows[0].storage_path , ()=>{})
             return res.status(202).json({
                 status: true,
                 message: "File Has Been Deleted Successfuly From The Server"
@@ -616,7 +625,8 @@ router.post('/shareWith', verifyToken, async (req, res) => {
         return res.status(200).json({
             status: true,
             message: "File Shared With User",
-            shareableURL
+            shareableURL,
+            sharedWithID:row[0].id
         })
     }
     catch (error) {
@@ -677,7 +687,6 @@ router.post('/removeShare', verifyToken, async (req, res) => {
                     operation: "Revoked",
                     shareByEmail: req.user.email,
                     shareWithEmail: sharedWithEmail,
-                    shareableURL,
                     shareName:req.user.name
                 }
 
@@ -703,6 +712,44 @@ router.post('/removeShare', verifyToken, async (req, res) => {
             status: false,
             message: error.message
         })
+    }
+})
+
+router.get('/:fileID' , verifyToken , async(req,res)=>{
+    const fileID = req.params.fileID
+    if(!fileID){
+        return res.status(401).json({
+            status:false,
+            message:"FileID is Mandatory Paramtere"
+        })
+    }
+
+    let connection;
+    try{
+        connection = await pool.getConnection()
+        connection.query("USE MINI_S3_BUCKET")
+
+        const [rows , fields] = await connection.query("SELECT *FROM files WHERE id = ?" , [fileID])
+        return res.status(200).json({
+            status:true,
+            rows,
+            message:"Data Retrived"
+        })
+    }
+    catch(error){
+        console.log(`Error in File Info Get`)
+        fs.writeFile(path.join(__dirname, '..' , 'metrix.txt') , error.message + '\n' , {
+            encoding:'utf-8'
+        })
+
+        return res.status(500).json({
+            status:false,
+            message:"Internal Server Error"
+        })
+    }
+    finally{
+        if(connection)
+            connection.release()
     }
 })
 

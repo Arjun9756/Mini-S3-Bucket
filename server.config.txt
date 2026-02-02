@@ -1,0 +1,213 @@
+REQUEST POST = localhost:3000/api/user/register
+PAYLOAD = {name , email , password}
+OUTPUT = {
+    "email":"ab9604783@gmail.com",
+    "password":"1234",
+    "name":"Arjun Singh Negi"
+}
+
+REQUEST POST = localhost:3000/api/user/login
+PAYLOAD = {email , password}
+OUTPUT = {
+    "status": true,
+    "message": "Keep This API Key And Secret Secure With Yours We Are Not Responsible For The Any Legal Compilances",
+    "userId": "9da0d533934587ee5b3f3415fad1a8b1fa1897cef894cdeda1b14f498cbc46f9",
+    "name": "Arjun Singh Negi",
+    "api_key": "key_40ada6569856c5d4022cf1df185f35e7",
+    "api_secret_hash": "$2b$10$TDw2b7hDyN.VfGGOoNDU1uO/KS2YV6WEiaaohk3oRTK414YlRNe8.",
+    "permission": {
+        "upload": true,
+        "download": true
+    },
+    "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJfaWQiOiI5ZGEwZDUzMzkzNDU4N2VlNWIzZjM0MTVmYWQxYThiMWZhMTg5N2NlZjg5NGNkZWRhMWIxNGY0OThjYmM0NmY5IiwibmFtZSI6IkFyanVuIFNpbmdoIE5lZ2kiLCJlbWFpbCI6ImFiOTYwNDc4M0BnbWFpbC5jb20iLCJpYXQiOjE3NzAwMDMwODQsImV4cCI6MTc3MDE3NTg4NH0.-7Pa4Wn4ozuHxQlF5iDLtwEsIH4c0Y-9ACr8dt1Knp4"
+}
+
+REQUEST DELETE = locahost:3000/api/user/delete
+PAYLOAD = {Bearer token in header}
+OUTPUT = {
+    "status": true,
+    "message": "User Deleted Successfuly"
+}
+
+
+/************************************** FILE MANAGEMENT *************************************/
+
+1.User will login and every time it will send her token 
+2. In file 1st step is to generate sign url
+
+REQUEST POST = locahost:3000/api/file/generate-sign-url
+PAYLOAD = {fileName , operation , api_key}
+
+OUTPUT = {
+    "status": true,
+    "message": "Signed URL Generated Successfuly",
+    "expireAfter": "5 Minutes",
+    "signedURL": "http://localhost:3000/api/file/file-access?uid=4e92c300b9b496e3b49e48c24b3cf41f47aa11d2d8f54fba97dbe8f405c9f5ce&path=uploads%2F4e92c300b9b496e3b49e48c24b3cf41f47aa11d2d8f54fba97dbe8f405c9f5ce&op=upload&exp=1770003896752&signature=55cca390d70d755438c6b155064da4b6fd5982de5def353963b648e149120f4d",
+    "digitalSignature": "55cca390d70d755438c6b155064da4b6fd5982de5def353963b648e149120f4d"
+}
+
+user will hit this signedURL
+
+3. Push file on that url with sending bearer token also
+REQUEST POST = localhost:3000/api/file/signedURL
+OUTPUT = {
+    "status": true,
+    "message": "File Inserted On The Server",
+    return res.status(200).json({
+            status: true,
+            message: "File Inserted On The Server",
+            rows,
+            uniqueFileID: uniqueFileID,
+            userId: req.user._id,
+            fileNameOnServer: req.file.filename,
+            filePath: req.file.path,
+            fileMimeType: req.file.mimetype,
+            shared_with: JSON.stringify({}),
+            visibilty: 'public',
+            original_name: req.file.originalname,
+            createdAt: Date.now()
+    })
+}
+
+4. Get The File
+REQUEST POST = locahost:3000/api/file/getFiles
+Output = {
+    "status": true,
+    "message": "Data is Array of Object Use [] Operator For Efficeny & Accuracy",
+    "data": [
+        {
+            "id": "ee04f8d6fc57820e0c792bf52d13be5a7f19bc2a8827dba3a5717056f7711c4c",
+            "user_id": "4e92c300b9b496e3b49e48c24b3cf41f47aa11d2d8f54fba97dbe8f405c9f5ce",
+            "filename": "1770003641462ARJUN FINAL RESUME.pdf",
+            "storage_path": "uploads\\4e92c300b9b496e3b49e48c24b3cf41f47aa11d2d8f54fba97dbe8f405c9f5ce\\1770003641462ARJUN FINAL RESUME.pdf",
+            "size": 90609,
+            "mime_type": "application/pdf",
+            "shared_with": {},
+            "visibilty": "public",
+            "original_name": "ARJUN FINAL RESUME.pdf",
+            "createdAt": "1770003642638"
+        }
+    ]
+}
+
+REQUEST POST = locahost:3000/api/file/download
+PAYLOAD = {storagePath, origialName, id} this id = uniqueFileID
+Output download started 
+
+
+REQUEST DELETE = localhost:3000/api/file/delete
+PAYLOAD = {id=uniqueFileID , storagePath}
+
+Output =  return res.status(202).json({
+                status: true,
+                message: "File Has Been Deleted Successfuly From The Server"
+            })
+
+
+REQUEST POST = localhost:3000/api/file/shareWith
+PAYLOAD = {emailToShareWith, fileID, filePath} filePath = storagePath , fileID = uniqueFileID
+Note down that whenever you are sending the filePath \ is an eascap charater which can create an issue with the directory 
+exmaple uploads\4e92c300b9b496e3b49e48c24b3cf41f47aa11d2d8f54fba97dbe8f405c9f5ce\1770003641462ARJUN FINAL RESUME.pdf here \ is an escape so correct path to send from frtonendis
+uploads\\4e92c300b9b496e3b49e48c24b3cf41f47aa11d2d8f54fba97dbe8f405c9f5ce\\1770003641462ARJUN FINAL RESUME.pdf
+
+Output = {
+    "status": true,
+    "message": "File Shared With User",
+    "shareableURL": "http://localhost:3000/api/file/download?shareByID=4e92c300b9b496e3b49e48c24b3cf41f47aa11d2d8f54fba97dbe8f405c9f5ce&shareFileID=ee04f8d6fc57820e0c792bf52d13be5a7f19bc2a8827dba3a5717056f7711c4c&shareFilePath=uploads%5C4e92c300b9b496e3b49e48c24b3cf41f47aa11d2d8f54fba97dbe8f405c9f5ce%5C1770003641462ARJUN%20FINAL%20RESUME.pdf&shareWithEmail=as9604793%40gmail.com&shareWithID=5814398123f5ff9b38f79b992e60d0abd6e828c8b54315e51f4681450195b1c8",
+    "sharedWithID": "5814398123f5ff9b38f79b992e60d0abd6e828c8b54315e51f4681450195b1c8"
+}
+
+Keep this sharedWithID its important to revoke
+
+this shared_with will have the info about who share to whom but make sure about the file path directory
+"shared_with": {},
+
+REQUEST POST = locahost:3000/api/file/removeShare
+PAYLOAD = {sharedWithEmail , sharedWithId}
+Output = {
+    "status": true,
+    "message": "Shared User Removed From List"
+}
+
+REQUEST GET = locahost:3000/api/file/fileID
+Output = {
+    "status": true,
+    "rows": [
+        {
+            "id": "ee04f8d6fc57820e0c792bf52d13be5a7f19bc2a8827dba3a5717056f7711c4c",
+            "user_id": "4e92c300b9b496e3b49e48c24b3cf41f47aa11d2d8f54fba97dbe8f405c9f5ce",
+            "filename": "1770003641462ARJUN FINAL RESUME.pdf",
+            "storage_path": "uploads\\4e92c300b9b496e3b49e48c24b3cf41f47aa11d2d8f54fba97dbe8f405c9f5ce\\1770003641462ARJUN FINAL RESUME.pdf",
+            "size": 90609,
+            "mime_type": "application/pdf",
+            "shared_with": [
+                {
+                    "shareByID": "4e92c300b9b496e3b49e48c24b3cf41f47aa11d2d8f54fba97dbe8f405c9f5ce",
+                    "shareFileID": "ee04f8d6fc57820e0c792bf52d13be5a7f19bc2a8827dba3a5717056f7711c4c",
+                    "shareWithID": "5814398123f5ff9b38f79b992e60d0abd6e828c8b54315e51f4681450195b1c8",
+                    "shareFilePath": "uploads\\4e92c300b9b496e3b49e48c24b3cf41f47aa11d2d8f54fba97dbe8f405c9f5ce\\1770003641462ARJUN FINAL RESUME.pdf",
+                    "shareWithEmail": "as9604793@gmail.com"
+                }
+            ],
+            "visibilty": "public",
+            "original_name": "ARJUN FINAL RESUME.pdf",
+            "createdAt": "1770003642638"
+        }
+    ],
+    "message": "Data Retrived"
+}
+
+
+/************************************************************** ANAYLYSIS PART *****************************************************/
+REQUEST GET = http://localhost:3000/api/report/analysisData
+Output = {
+    "status": true,
+    "message": "Data Retrival For Analysis Of File",
+    "rows": [
+        {
+            "id": "c328b6fbaf25a4d44479f67f9b248f442f8c87aea983681d9ee6bd04784b31d3",
+            "file_id": "ee04f8d6fc57820e0c792bf52d13be5a7f19bc2a8827dba3a5717056f7711c4c",
+            "user_id": "4e92c300b9b496e3b49e48c24b3cf41f47aa11d2d8f54fba97dbe8f405c9f5ce",
+            "date_scan": "1770003644",
+            "stats": {
+                "failure": 0,
+                "timeout": 0,
+                "harmless": 0,
+                "malicious": 0,
+                "suspicious": 0,
+                "undetected": 64,
+                "type-unsupported": 12,
+                "confirmed-timeout": 0
+            },
+            "analysisId": "YTZhNjBhZDY0Y2ZmZjdjNDJlOTIyNjk0ZmQ2MGI2YWE6MTc3MDAwMzY0NA==",
+            "status": "safe"
+        }
+    ]
+}
+
+
+REQUEST POST = locahost:3000/api/report/fileID
+Output = {
+    "status": true,
+    "message": "Data Retrival For Analysis Of File",
+    "rows": [
+        {
+            "id": "c328b6fbaf25a4d44479f67f9b248f442f8c87aea983681d9ee6bd04784b31d3",
+            "file_id": "ee04f8d6fc57820e0c792bf52d13be5a7f19bc2a8827dba3a5717056f7711c4c",
+            "user_id": "4e92c300b9b496e3b49e48c24b3cf41f47aa11d2d8f54fba97dbe8f405c9f5ce",
+            "date_scan": "1770003644",
+            "stats": {
+                "failure": 0,
+                "timeout": 0,
+                "harmless": 0,
+                "malicious": 0,
+                "suspicious": 0,
+                "undetected": 64,
+                "type-unsupported": 12,
+                "confirmed-timeout": 0
+            },
+            "analysisId": "YTZhNjBhZDY0Y2ZmZjdjNDJlOTIyNjk0ZmQ2MGI2YWE6MTc3MDAwMzY0NA==",
+            "status": "safe"
+        }
+    ]
+}

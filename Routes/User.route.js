@@ -108,7 +108,7 @@ router.post('/register', async (req, res) => {
 // Login Logic
 router.post('/login', async (req, res) => {
 
-    const { email, password, _id } = req.body
+    const { email, password} = req.body
     console.log(email , password)
     if (!email || !password) {
         return res.status(401).json({
