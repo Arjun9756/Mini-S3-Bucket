@@ -50,7 +50,7 @@ async function getAnalysisReport(analysisId) {
                 return { date: res.data.data.attributes.date, stats: res.data.data.attributes.stats }
             }
             await new Promise((resolve, reject) => {
-                setTimeout(resolve, 3000)      // Har 3 second bad resolve hoga tab tak await loop ko sleep krega agr reject krdiya hota toh await error throw krta
+                setTimeout(resolve, 25000)      // Har 3 second bad resolve hoga tab tak await loop ko sleep krega agr reject krdiya hota toh await error throw krta
             })
         }
         throw new Error("Analysis Did Not Complete After 20 Retries")

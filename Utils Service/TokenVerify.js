@@ -42,6 +42,10 @@ async function verifyToken(req, res, next) {
             message: "Token Decoding Failed"
         })
     }
+    finally{
+        if(connection)
+            connection.release()
+    }
 }
 
 module.exports = verifyToken

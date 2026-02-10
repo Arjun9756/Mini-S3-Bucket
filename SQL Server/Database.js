@@ -12,6 +12,7 @@ const pool = mysql.createPool({
     port:process.env.AIVEN_SQL_PORT,
     user:process.env.AIVEN_SQL_USERNAME,
     waitForConnections:true,
+    connectionLimit:5,
     ssl:{
         ca:fs.readFileSync(path.join(__dirname , '..' , 'ca.pem')),
         rejectUnauthorized:true

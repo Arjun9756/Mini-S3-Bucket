@@ -38,6 +38,17 @@ const virusScanWorker = new Worker('virusScanQueue', async (job) => {
             console.log(rows, stats)
             if (status === 'dangerous') {
                 await fs.unlink(path.join(__dirname, '..', filePath))
+                status = 'dangerous'
+                date = Date.now()
+                const [rows] = await connection.query(`INSERT INTO analysis(id, file_id, user_id, date_scan, stats, analysisId , status) VALUES (?, ?, ?, ?, ?, ?, ?)`, [
+                    analysisUnqiueId,
+                    uniqueFileID,
+                    userId,
+                    date,
+                    JSON.stringify({}),
+                    analysisId,
+                    status
+                ])
                 console.log("File Removed From Server Due To Malicious File or Suspicious File")
                 return
             }
@@ -50,9 +61,24 @@ const virusScanWorker = new Worker('virusScanQueue', async (job) => {
         }
         catch (error) {
             console.log(`Error While Query to SQL To Save File Report Data ${error.message}`)
+            let status = 'dangerous'
+            let date = Date.now()
+            const [rows] = await connection.query(`INSERT INTO analysis(id, file_id, user_id, date_scan, stats, analysisId , status) VALUES (?, ?, ?, ?, ?, ?, ?)`, [
+                analysisUnqiueId,
+                uniqueFileID,
+                userId,
+                date,
+                JSON.stringify({}),
+                analysisId,
+                status
+            ])
             throw new Error(error.message)
             // Append FailOver Mechanism
-
+        }
+        finally{
+            if(connection){
+                connection.release()
+            }
         }
     }
 },
@@ -129,6 +155,9 @@ const mailWorker = new Worker('mailQueue', async (job) => {
     catch (error) {
         console.log(`Error While Sending The Mail To User Retry Throwed Error To Parent Process ${error}`)
         throw new Error(error.message || "Error While Sending The Mail To User Retry Throwed Error To Parent Process")
+    }
+    finally{
+        
     }
 },
     {
